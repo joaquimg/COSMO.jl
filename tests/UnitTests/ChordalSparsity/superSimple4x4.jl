@@ -1,6 +1,6 @@
-workspace()
-include("../../../src/Solver.jl")
-using OSSDP, Base.Test
+# workspace()
+# include("../../../src/Solver.jl")
+# using OSSDP, Base.Test
 
 
 function projectCone(x)
@@ -48,6 +48,7 @@ q = (-P*xtrue -  A'*ytrue)[:]
 
 σ = 1e-6
 ρ = 0.1
+α = 1.6
 
 E1 = [1 0 0 0;0 1 0 0;0 0 1 0] #C1:{1 2 3}
 E2 = [1 0 0 0;0 0 1 0;0 0 0 1] #C2: {1 3 4}
@@ -55,12 +56,7 @@ H1 = kron(E1,E1)
 H2 = kron(E2,E2)
 D = H1'*H1 + H2'*H2
 
-# xt = zeros(n,1)
-# ν = zeros(m,1)
-# x = zeros(n,1)
-# s = zeros(m,1)
-# st = zeros(m,1)
-# μ = zeros(m,1)
+
 
 # find solution with QOCS
 K = OSSDPTypes.Cone(0,0,[],[16])
@@ -89,7 +85,7 @@ strue = vec(Strue)[usedVar]
 nz = length(usedVar)
 xt = zeros(n,1)
 ν = zeros(nz,1)
-x = zeros(n,1)
+x = 0.
 s = zeros(numCLiqueNodes,1)
 st = zeros(numCLiqueNodes,1)
 μ = zeros(numCLiqueNodes,1)
@@ -108,11 +104,12 @@ for iii = 1:1500
   RHS = [-q+σ*x;br-s_sum + 1/ρ.*μ_sum]
   sol = F\RHS
 
-  xt = sol[1:n]
+  xt = sol[1:n][1]
   ν = sol[n+1:end]
 
-  x = xt
+  x = α*xt + (1.0-α)*x
   st = s - (ν[CIND] + μ)./ρ
+  st = α*st + (1.0-α)*s
 
   proj = st + μ./ρ
   proj1 = proj[1:9]
@@ -136,7 +133,7 @@ end
 sol1_s = zeros(m)
 sol1_s[usedVar] = s_sum
 sol1_x = x
-cost1 = q'*x
+cost1 = (q'*x)[1]
 sol1_ν = ν
 sol1_μ = μ_sum
 
@@ -237,10 +234,12 @@ cost3 = q'*x
 sol3_ν = ν
 sol3_μ = μ
 @testset "Simple ADMM loop" begin
-  @test abs(res.cost - cost1) < 1e-2
-  @test abs(res.cost - cost2) < 1e-2
-  @test abs(res.cost - cost3) < 1e-2
+  @test abs(res.cost - cost1) < 1e-5
+  @test abs(res.cost - cost2) < 1e-5
+  @test abs(res.cost - cost3) < 1e-5
   @test minimum(eig(reshape(sol1_s,4,4))[1]) > -1e-5
+  @test minimum(eig(reshape(sol2_s,4,4))[1]) > -1e-5
+  @test minimum(eig(reshape(sol3_s,4,4))[1]) > -1e-5
   @test norm(sol1_s - sol2_s,Inf) < 1e-3
   @test norm(sol1_s - sol3_s,Inf) < 1e-3
   @test norm(sol2_s - sol3_s,Inf) < 1e-3
