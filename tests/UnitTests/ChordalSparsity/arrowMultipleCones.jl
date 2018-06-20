@@ -15,7 +15,7 @@ nBlk = [2 3]
 BlkSize = [2 2]
 ArrowWidth = [1 1]
 P,q,A,b,Ks = generateArrowMultCones(rng, m,numCones,nBlk,BlkSize,ArrowWidth);
- K = OSSDPTypes.Cone(0,0,[],Ks)
+K = OSSDPTypes.Cone(0,0,[],Ks)
 
 
 

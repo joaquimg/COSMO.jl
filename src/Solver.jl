@@ -8,10 +8,13 @@ include("./Parameters.jl")
 include("./Infeasibility.jl")
 include("./Printing.jl")
 include("./Setup.jl")
+include("./Graph.jl")
+include("./Tree.jl")
+include("./ChordalSparsity.jl")
 
 module OSSDP
 
-using Projections, Scaling, OSSDPTypes, Parameters, Infeasibility, Residuals, Printing, Setup
+using Projections, Scaling, OSSDPTypes, Parameters, Infeasibility, Residuals, Printing, Setup, ChordalSparsity
 export solve, OSSDPSettings, Cone #from the Types module
 
 
