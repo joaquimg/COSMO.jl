@@ -45,14 +45,23 @@ end
 
 # SOLVER ROUTINE
 # -------------------------------------
-function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
+  function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
+  runTime_start = time()
 
   # check if chordal decomposition wanted and possible, if so augment system
-  settings.decompose && chordalDecomposition!(P,q,A,b,K)
-
+  chordalInfo = OSSDPTypes.ChordalInfo(size(A,1),size(A,2),K)
+  if settings.decompose
+    Pa,qa,Aa,ba,Ka = chordalDecomposition!(P,q,A,b,K,settings)
+  else
+    Pa = P
+    qa = q
+    Aa = A
+    ba = b
+    Ka = K
+  end
   # create workspace variables
-  ws = WorkSpace(Problem(P,q,A,b,K),ScaleMatrices())
-  P = q = A = b = nothing
+  ws = WorkSpace(Problem(Pa,qa,Aa,ba,Ka),ScaleMatrices(),chordalInfo)
+  P = q = A = b = K = nothing
 
   # perform preprocessing steps (scaling, initial KKT factorization)
   tic()
@@ -70,8 +79,8 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   # print information about settings to the screen
   settings.verbose && printHeader(ws,settings,setupTime)
 
-  tic()
-  startTime = time()
+
+  timeLimit_start = time()
 
   #preallocate arrays
   δx = similar(ws.x)
@@ -83,6 +92,8 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   ls = zeros(n + m)
   sol = zeros(n + m)
 
+  iter_start = time()
+
   for iter = 1:settings.max_iter
 
     @. δx = ws.x
@@ -90,7 +101,7 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
     admmStep!(
       ws.x, ws.s, ws.μ, ws.ν,
       x_tl, s_tl, ls,sol,
-      ws.p.F, ws.p.q, ws.p.b, K, ws.p.ρVec,
+      ws.p.F, ws.p.q, ws.p.b, ws.p.K, ws.p.ρVec,
       settings.alpha, settings.sigma,
       m, n
       )
@@ -152,15 +163,14 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
       adaptRhoVec!(ws,settings)
     end
 
-    if settings.timelimit !=0 &&  (time() - startTime) > settings.timelimit
+    if settings.timelimit !=0 &&  (time() - timeLimit_start) > settings.timelimit
       status = :TimeLimit
       break
     end
 
   end #END-ADMM-MAIN-LOOP
 
-  rt = toq()
-  avgIterTime = rt/iter
+  iterTime = (time()-iter_start)
 
   # calculate primal and dual residuals
   if iter == settings.max_iter
@@ -176,14 +186,15 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   end
 
   # if necessary, reverse augmentation to get solution to original problem
-  settings.decompose && reverseDecomposition!(ws)
+  settings.decompose && reverseDecomposition!(ws,settings)
 
+  runTime = time() - runTime_start
   # print solution to screen
-  settings.verbose && printResult(status,iter,cost,rt)
+  settings.verbose && printResult(status,iter,cost,runTime)
 
 
   # create result object
-  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,rt,setupTime,avgIterTime,r_prim,r_dual);
+  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,r_prim,r_dual);
 
   return result,ws, δx, -δy;
 

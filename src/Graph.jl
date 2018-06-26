@@ -9,7 +9,7 @@ mutable struct Graph
   reverseOrder::Array{Int64} #σ^(-1)(i)
 
  # constructor for sparse input matrix
-  function Graph(A::SparseMatrixCSC{Float64,Int64})
+  function Graph(A::SparseMatrixCSC{Int64,Int64})
       if A != A'
           error("Input has to be a symmetric matrix.")
       end

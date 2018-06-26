@@ -3,30 +3,30 @@ export OSSDPResult, Problem, OSSDPSettings, ScaleMatrices, Cone, WorkSpace
 # -------------------------------------
 # struct DEFINITIONS
 # -------------------------------------
-struct OSSDPResult
-  x::Array{Float64}
-  s::Array{Float64}
-  ν::Array{Float64}
-  μ::Array{Float64}
-  cost::Float64
-  iter::Int64
-  status::Symbol
-  solverTime::Float64
-  setupTime::Float64
-  avgIterTime::Float64
-  rPrim::Float64
-  rDual::Float64
-end
+  struct OSSDPResult
+    x::Array{Float64}
+    s::Array{Float64}
+    ν::Array{Float64}
+    μ::Array{Float64}
+    cost::Float64
+    iter::Int64
+    status::Symbol
+    solverTime::Float64
+    setupTime::Float64
+    iterTime::Float64
+    rPrim::Float64
+    rDual::Float64
+  end
 
 
-# Redefinition of the show function that fires when the object is called
-function Base.show(io::IO, obj::OSSDPResult)
-  println(io,"\nRESULT: \nTotal Iterations: $(obj.iter)\nCost: $(round.(obj.cost,2))\nStatus: $(obj.status)\nSolve Time: $(round.(obj.solverTime*1000,2))ms\nSetup Time: $(round.(obj.setupTime*1000,2))ms\nAvg Iter Time: $(round.(obj.avgIterTime*1000,2))ms" )
-end
+  # Redefinition of the show function that fires when the object is called
+  function Base.show(io::IO, obj::OSSDPResult)
+    println(io,"\nRESULT: \nTotal Iterations: $(obj.iter)\nCost: $(round.(obj.cost,2))\nStatus: $(obj.status)\nSolve Time: $(round.(obj.solverTime*1000,2))ms\nSetup Time: $(round.(obj.setupTime*1000,2))ms\nAvg Iter Time: $(round.((obj.iterTime/obj.iter)*1000,2))ms" )
+  end
 
 
 # product of cones dimensions, similar to SeDuMi
-struct Cone
+mutable struct Cone
   # number of zero  components
   f::Int64
   # number of nonnegative components
@@ -97,18 +97,26 @@ mutable struct ScaleMatrices
   ScaleMatrices() = new(spzeros(1,1),spzeros(1,1),spzeros(1,1),spzeros(1,1),1.,1.)
 end
 
+mutable struct ChordalInfo
+  originalM::Int64
+  originalN::Int64
+  originalK::OSSDPTypes.Cone
+end
+
+
 mutable struct WorkSpace
   p::OSSDPTypes.Problem
   sm::OSSDPTypes.ScaleMatrices
+  ci::OSSDPTypes.ChordalInfo
   x::Vector{Float64}
   s::Vector{Float64}
   ν::Vector{Float64}
   μ::Vector{Float64}
   #constructor
-  function WorkSpace(p::OSSDPTypes.Problem,sm::OSSDPTypes.ScaleMatrices)
+  function WorkSpace(p::OSSDPTypes.Problem,sm::OSSDPTypes.ScaleMatrices,ci::OSSDPTypes.ChordalInfo)
     m = p.m
     n = p.n
-    new(p,sm,zeros(n),zeros(m),zeros(m),zeros(m))
+    new(p,sm,ci,zeros(n),zeros(m),zeros(m),zeros(m))
   end
 end
 
