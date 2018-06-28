@@ -79,7 +79,7 @@ K = OSSDPTypes.Cone(1,2,[],[9 9])
 P = speye(size(A,2))
 q = zeros(size(A,2))
 
-function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float64},A::SparseMatrixCSC{Float64,Int64},b::Vector{Float64},K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
+function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float64},A::SparseMatrixCSC{Float64,Int64},b::Vector{Float64},K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings,chordalInfo::OSSDPTypes.ChordalInfo)
 
   # do nothing if no psd cones present in the problem
   if length(K.s) == 0
@@ -104,8 +104,9 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
     st+= K.s[iii]
   end
 
-  # find transformation matrix H
+  # find transformation matrix H and store it
   H, KsA = findStackingMatrix(K,cliqueSets)
+  chordalInfo.H = H
 
   # augment the system, change P,q,A,b
   m,n = size(A)
@@ -116,7 +117,7 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
   b = [b;zeros(nH)][:]
 
   K = OSSDPTypes.Cone(K.f + mH,K.l,K.q,KsA)
-  # problem data is returned instead of mutated in the function since problem size changes (K is already mutated )
+  # problem data is returned instead of mutated in the function since problem size changes
   # TODO: Also return some information about sparsity to reverse decomposition
   return P,q,A,b,K
 end
@@ -221,7 +222,7 @@ end
 function reverseDecomposition!(ws,settings)
   mO = ws.ci.originalM
   nO = ws.ci.originalN
-  H = ws.p.A[1:mO,nO+1:end]
+  H = ws.ci.H
   ws.s = H*ws.s[mO+1:end]
   ws.x = ws.x[1:nO]
   ws.μ = H*ws.μ[mO+1:end]
@@ -229,7 +230,7 @@ function reverseDecomposition!(ws,settings)
   # settings.completeDual && psdCompletion(ws.μ)
   ws.ν = H*ws.ν[mO+1:end]
 
-  return nothing
+  return H
 end
 
 

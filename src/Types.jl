@@ -101,6 +101,10 @@ mutable struct ChordalInfo
   originalM::Int64
   originalN::Int64
   originalK::OSSDPTypes.Cone
+  H::SparseMatrixCSC{Float64,Int64}
+  function ChordalInfo(originalM::Int64,originalN::Int64,originalK::OSSDPTypes.Cone)
+    return new(originalM,originalN,originalK,spzeros(1,1))
+  end
 end
 
 

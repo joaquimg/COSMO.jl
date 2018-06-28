@@ -51,7 +51,7 @@ end
   # check if chordal decomposition wanted and possible, if so augment system
   chordalInfo = OSSDPTypes.ChordalInfo(size(A,1),size(A,2),K)
   if settings.decompose
-    Pa,qa,Aa,ba,Ka = chordalDecomposition!(P,q,A,b,K,settings)
+    Pa,qa,Aa,ba,Ka = chordalDecomposition!(P,q,A,b,K,settings,chordalInfo)
   else
     Pa = P
     qa = q
@@ -196,7 +196,7 @@ end
   # create result object
   result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,r_prim,r_dual);
 
-  return result,ws, δx, -δy;
+  return result,ws;
 
 end
 
