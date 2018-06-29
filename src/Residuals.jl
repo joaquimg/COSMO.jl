@@ -1,6 +1,6 @@
 module Residuals
   using OSSDPTypes
-  export calculateResiduals, maxResComponentNorm, hasConverged
+  export calculateResiduals, maxResComponentNorm, hasConverged,investigateMaxNorms
 
   function calculateResiduals(ws::OSSDPTypes.WorkSpace,settings::OSSDPTypes.OSSDPSettings, IGNORESCALING_FLAG::Bool=false)
         if (settings.scaling != 0 && !IGNORESCALING_FLAG)
@@ -27,6 +27,31 @@ module Residuals
     end
     return maxNormPrim, maxNormDual
   end
+
+  function investigateMaxNorms(ws,settings)
+    IGNORESCALING_FLAG = false
+    if (settings.scaling != 0 && !IGNORESCALING_FLAG)
+      maxNormPrim1 = norm(ws.sm.Einv*ws.p.A*ws.x,Inf)
+      maxNormPrim2 = norm(ws.sm.Einv*ws.s,Inf)
+      maxNormPrim3 = norm(ws.sm.Einv*ws.p.b,Inf)
+      maxNormDual1 = norm(ws.sm.cinv*ws.sm.Dinv*ws.p.P*ws.x,Inf)
+      maxNormDual2 = norm(ws.sm.cinv*ws.sm.Dinv*ws.p.q,Inf)
+      maxNormDual3 = norm(ws.sm.cinv*ws.sm.Dinv*ws.p.A'*ws.μ,Inf)
+      normArr = [maxNormPrim1 maxNormPrim2 maxNormPrim3; maxNormDual1 maxNormDual2 maxNormDual3]
+    end
+    if (settings.scaling == 0 || IGNORESCALING_FLAG)
+      maxNormPrim1 = norm(ws.p.A*ws.x,Inf)
+      maxNormPrim2 = norm(ws.s,Inf)
+      maxNormPrim3 = norm(ws.p.b,Inf)
+      maxNormDual1 = norm(ws.p.P*ws.x,Inf)
+      maxNormDual2 = norm(ws.p.q,Inf)
+      maxNormDual3 = norm(ws.p.A'*ws.μ,Inf)
+      normArr = [maxNormPrim1 maxNormPrim2 maxNormPrim3; maxNormDual1 maxNormDual2 maxNormDual3]
+    end
+    return normArr
+  end
+
+
 
   function hasConverged(ws::OSSDPTypes.WorkSpace,settings::OSSDPTypes.OSSDPSettings,r_prim::Float64,r_dual::Float64)
     maxNormPrim, maxNormDual = maxResComponentNorm(ws,settings)

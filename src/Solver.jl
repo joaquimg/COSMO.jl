@@ -18,7 +18,7 @@ using Projections, Scaling, OSSDPTypes, Parameters, Infeasibility, Residuals, Pr
 export solve, OSSDPSettings, Cone #from the Types module
 
 
-function admmStep!(x, s, μ, ν, x_tl, s_tl, ls, sol, F, q, b, K, ρ, α, σ, m, n)
+function admmStep!(x, s, μ, ν, x_tl, s_tl, ls, sol, F, q, b, K, ρ, α, σ, m, n,projTime)
   # Create right hand side for linear system
   for i=1:n
     ls[i] = σ*x[i]-q[i]
@@ -36,10 +36,12 @@ function admmStep!(x, s, μ, ν, x_tl, s_tl, ls, sol, F, q, b, K, ρ, α, σ, m,
   @. s_tl = α*s_tl + (1.0-α)*s
   @. s = s_tl + μ./ρ
   # Project onto cone K
+  projStartTime = time()
   Projections.projectCompositeCone!(s, K)
+  projTime += (time() - projStartTime)
   # update dual variable μ
   @. μ = μ + ρ.*(s_tl - s)
-  nothing
+  return projTime
 end
 
 
@@ -47,7 +49,7 @@ end
 # -------------------------------------
   function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   runTime_start = time()
-
+  projTime = 0.
   # check if chordal decomposition wanted and possible, if so augment system
   chordalInfo = OSSDPTypes.ChordalInfo(size(A,1),size(A,2),K)
   if settings.decompose
@@ -98,12 +100,12 @@ end
 
     @. δx = ws.x
     @. δy = ws.μ
-    admmStep!(
+    projTime = admmStep!(
       ws.x, ws.s, ws.μ, ws.ν,
       x_tl, s_tl, ls,sol,
       ws.p.F, ws.p.q, ws.p.b, ws.p.K, ws.p.ρVec,
       settings.alpha, settings.sigma,
-      m, n
+      m, n,projTime
       )
 
     # compute deltas for infeasibility detection
@@ -170,6 +172,8 @@ end
 
   end #END-ADMM-MAIN-LOOP
 
+  normArr = Residuals.investigateMaxNorms(ws,settings)
+
   iterTime = (time()-iter_start)
 
   # calculate primal and dual residuals
@@ -194,9 +198,9 @@ end
 
 
   # create result object
-  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,r_prim,r_dual);
+  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,projTime,r_prim,r_dual);
 
-  return result,ws;
+  return result,ws,normArr;
 
 end
 

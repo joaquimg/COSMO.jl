@@ -98,7 +98,9 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
   for iii=1:numCones
     e =st+K.s[iii] - 1
     csp = findCommonSparsityPattern(A[st:e,:],b[st:e])
+    println("Common sparsity pattern found")
     sp = SparsityPattern(csp)
+    println("Sparsity Pattern created!")
     spArr[iii] = sp
     cliqueSets[iii] = CliqueSet(sp.cliques)
     st+= K.s[iii]
@@ -106,6 +108,7 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
 
   # find transformation matrix H and store it
   H, KsA = findStackingMatrix(K,cliqueSets)
+  println("Stacking Matrix Found")
   chordalInfo.H = H
 
   # augment the system, change P,q,A,b
@@ -123,25 +126,43 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
 end
 
 
-# Asub = sparse(rand(16,4))
-# bsub = rand(20,1)
+Asub = sparse(rand(16,4))
+bsub = rand(20,1)
 
-# Asub[4,:] = 0
-# Asub[15,:] = 0
-# Asub[8,:] = 0
-# bsub[15] = 0
-# bsub[8] = 0
+Asub[4,:] = 0
+Asub[15,:] = 0
+Asub[8,:] = 0
+bsub[15] = 0
+bsub[8] = 0
+
+# find the zero rows of a sparse matrix a
+function zeroRows(a::SparseMatrixCSC,DROPZEROS_FLAG::Bool)
+    DROPZEROS_FLAG && dropzeros!(a)
+    passive = trues(a.m)
+    for r in a.rowval
+        passive[r] = false
+    end
+    return find(passive)
+end
+
+
+function findCommonSparsity(Asub,bsub)
+  m,n = size(Asub)
+  AInd = zeroRows(Asub,false)
+  commonZeros = AInd[find(x->x==0,b[AInd])]
+
+  return commonZeros
+end
 
 function findCommonSparsityPattern(Asub,bsub)
   m,n = size(Asub)
-  AInd = find(x->Asub[x,:] == zeros(n),collect(1:m))
-  bInd = find(x->x==0,bsub)
-  zeroRows = intersect(AInd,bInd)
+  AInd = zeroRows(Asub,false)
+  commonZeros = AInd[find(x->x==0,b[AInd]))]
   mSize = Int(sqrt(m))
   csp = spzeros(Int64,mSize,mSize)
   csp[:,:] = 1
 
-  for ind in zeroRows
+  for ind in commonZeros
     i,j = vecToMatInd(ind,mSize)
     csp[i,j] = 0
   end
