@@ -6,7 +6,7 @@ using OSSDP
 using JuMP, Mosek
 
 problemName = "truss1.jld"
-data = JLD.load("../sdplib/"*problemName)
+data = JLD.load("../../sdplib/"*problemName)
 F = data["F"]
 c = data["c"]
 m = data["m"]
@@ -18,7 +18,7 @@ optVal = data["optVal"]
 # s.t.  Ax + s = b
 #       s in K
 # -----------------------
-# primal form
+# primal formS
 # -----------------------
 P = zeros(m,m)
 q = c

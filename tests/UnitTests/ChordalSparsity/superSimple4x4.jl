@@ -1,6 +1,6 @@
-# workspace()
-# include("../../../src/Solver.jl")
-# using OSSDP, Base.Test
+workspace()
+include("../../../src/Solver.jl")
+using OSSDP, OSSDPTypes, Base.Test
 
 
 function projectCone(x)
@@ -29,7 +29,7 @@ end
 rng = MersenneTwister(123123)
 maxIter = 10
 A = [1. 1 1 1; 1 1 1 0; 1 1 1 1;1 0 1 1 ]
-A = vec(A)
+A = vec(A)[:,:]
 m, = size(A)
 n = 1
 
@@ -60,8 +60,8 @@ D = H1'*H1 + H2'*H2
 
 # find solution with QOCS
 K = OSSDPTypes.Cone(0,0,[],[16])
-settings1 = OSSDPSettings(rho=0.1,sigma=1e-6,alpha=1.6,max_iter=10000,verbose=false,adaptive_rho=true)
-@time res,nothing = OSSDP.solve(P,q,A,b,K,settings1);
+settings1 = OSSDPSettings(rho=0.1,sigma=1e-6,alpha=1.6,max_iter=10000,verbose=true,adaptive_rho=true,decompose=true)
+ res,nothing = OSSDP.solve(P,q,A,b,K,settings1);
 
 
 

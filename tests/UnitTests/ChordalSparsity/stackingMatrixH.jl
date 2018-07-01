@@ -28,27 +28,6 @@ cliqueSets[2] = CliqueSet([[1;2;3],[2;3;4]])
 
  H,Ks2 = ChordalSparsity.findStackingMatrix(K,cliqueSets)
 
-# Tests
- function singleRows(A)
-  for iii=1:size(A,1)
-    if sum(A[iii,:]) != 1.
-      return false
-    end
-  end
-  return true
- end
+sbar =[ [1;1;2;1;2;3];[1;2;4;5;5;6;8;9];[1;2;3;5;6;7;9;10;11;6;7;8;10;11;12;14;15;16]]
 
- function zeroCols(A)
-  n = 0
-  for jjj=1:size(A,2)
-    nnz(A[:,jjj]) == 0 && (n+=1)
-  end
-  return n
-end
-
-
- @testset "Stacking Matrix" begin
-   @test nnz(H) == size(H,1)
-   @test singleRows(H)
-   @test zeroCols(H) == (sum(Ks) - sum(Ks2))
-end
+s = H*sbar
