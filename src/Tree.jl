@@ -53,6 +53,49 @@ module TreeModule
         return size(ct.nodes,1)
     end
 
+    # elimination tree algorithm from H.Liu - A Compact Row Storage Scheme for Cholesky Factors Using Elimination Trees
+    function etree_liu(g::Graph)
+    N = length(g.adjacencyList)
+    par = zeros(Int64,N)
+    ancestor = zeros(Int64,N)
+
+    elemSequence = g.reverseOrder[collect(1:N)]
+    for iii in elemSequence
+        for vk in g.adjacencyList[iii]
+            if g.ordering[vk] < g.ordering[iii]
+                r = vk
+                while (ancestor[r] != 0) && (ancestor[r] != iii)
+                    t = ancestor[r]
+                    ancestor[r] = iii
+                    r = t
+                end
+                if ancestor[r] == 0
+                    ancestor[r] = iii
+                    par[r] = iii
+                end
+            end
+        end
+    end
+
+    return par
+    end
+
+
+
+    # simplified version of my own elimination tree algorithm with simplified data structure
+    function etree(g::Graph)
+        N = numberOfVertices(g)
+        par = zeros(Int64,N)
+        # loop over Vertices of graph
+        for i=1:N
+            value = i
+            # number of i-neighbors with order higher than order of node i
+            par_ = GraphModule.findParentDirect(g,i)
+            par[i] = par_
+        end
+        return par
+    end
+
 
     function createTreeFromGraph(g::Graph)
         tree = Tree()

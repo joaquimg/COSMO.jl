@@ -1,6 +1,6 @@
 module GraphModule
 
-export Graph, numberOfVertices, mcsmSearch!, findHigherNeighbors, findParent, isPerfectOrdering, isConnected
+export Graph, numberOfVertices, mcsSearch!, mcsmSearch!, findHigherNeighbors, findParent, isPerfectOrdering, isConnected, copyGraph, equalGraphs
 
 
 mutable struct Graph
@@ -9,7 +9,7 @@ mutable struct Graph
   reverseOrder::Array{Int64} #σ^(-1)(i)
 
   # constructor for sparse input matrix
-  function Graph(A::SparseMatrixCSC{Int64,Int64})
+  function Graph(A::Union{SparseMatrixCSC{Int64,Int64},SparseMatrixCSC{Float64,Int64}})
     if A != A'
       error("Input has to be a symmetric matrix.")
     end
@@ -27,11 +27,13 @@ mutable struct Graph
     g = new(adjacencyList,ordering,[])
     # make sure that the graph is connected
     connectGraph!(g)
-
     # make graph chordal
     mcsmSearch!(g)
-
     return g
+  end
+
+  function Graph(aL,o,ro)
+    return new(aL,o,ro)
   end
 
   # constructor for list of zero or nonzero rows of vectorized matrix
@@ -62,10 +64,10 @@ mutable struct Graph
     end
     g = new(adjacencyList,ordering,[])
     # make sure that the graph is connected
-     connectGraph!(g)
+    connectGraph!(g)
 
-     # make graph chordal
-     mcsmSearch!(g)
+    # make graph chordal
+    mcsmSearch!(g)
 
     return g
   end
@@ -74,6 +76,21 @@ end
 # -------------------------------------
 # FUNCTION DEFINITIONS
 # -------------------------------------
+
+# function to compare two graphs based on their adjacencylist
+function equalGraphs(g1,g2)
+ for iii=1:length(g1.adjacencyList)
+  if g1.adjacencyList[iii] != g2.adjacencyList[iii]
+    return false
+  end
+end
+return true
+end
+
+# deepcopy function for Graph struct
+function Base.deepcopy(g::Graph)
+  return Graph(deepcopy(g.adjacencyList), deepcopy(g.ordering), deepcopy(g.reverseOrder))
+end
 
 # Redefinition of the show function that fires when the object is called
 function Base.show(io::IO, obj::Graph)
@@ -104,11 +121,53 @@ function findParent(g::Graph,higherNeighbors::Array{Int64})
   end
 end
 
+function findParentDirect(g::Graph,v::Int64)
+  order = g.ordering[v]
+  neighbors = g.adjacencyList[v]
+  higherOrders = filter(x->x>order,g.ordering[neighbors])
+  if length(higherOrders) > 0
+    return g.reverseOrder[minimum(higherOrders)]
+  else
+    return 0
+  end
+end
+
+
+
 function findHigherNeighbors(g::Graph,nodeNumber::Int64)
   order = g.ordering[nodeNumber]
   neighbors = g.adjacencyList[nodeNumber]
   higherNeighbors = neighbors[find(f->f>order,g.ordering[neighbors])]
   return higherNeighbors
+end
+
+# performs a maximum cardinality search and updates the ordering to the graph (only perfect elim. ordering if graph is chordal)
+function mcsSearch!(g::Graph)
+  N = numberOfVertices(g)
+  weights = zeros(N)
+  unvisited = ones(N)
+  perfectOrdering = zeros(N)
+  for i = N:-1:1
+    # find unvisited vertex of maximum weight
+    unvisited_weights = weights.*unvisited
+    indMax = indmax(unvisited_weights)
+    perfectOrdering[indMax] = i
+    unvisited[indMax] = 0
+    for neighbor in g.adjacencyList[indMax]
+      if unvisited[neighbor] == 1
+        weights[neighbor]+=1
+      end
+    end
+  end
+  # update ordering of graph
+  g.ordering = perfectOrdering
+  reverseOrder = zeros(size(perfectOrdering,1))
+  # also compute reverse order σ^-1(v)
+  for i = 1:N
+    reverseOrder[Int64(perfectOrdering[i])] = i
+  end
+  g.reverseOrder = reverseOrder
+  return nothing
 end
 
 # implementation of the MCS-M algorithm (see. A. Berry - Maximum Cardinality Search for Computing Minimal Triangulations of Graphs) that finds a minimal triangulation

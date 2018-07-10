@@ -1,16 +1,16 @@
-# workspace()
-# include("../../../src/Solver.jl")
-# include("../solverComparison/Compare.jl")
+workspace()
+include("../../../src/Solver.jl")
+include("../solverComparison/Compare.jl")
 
-# using JLD, Compare, OSSDP
-folderName = "AfterBugFix"
-dir = "../resultDataFiles/SDP_Benchmark_Problems/"*folderName
+using JLD, Compare, OSSDP
+folderName = "CompareSparseFormat_large_termination"
+dir = "../../resultDataFiles/SDP_Benchmark_Problems/"*folderName
 results = []
 for f in filter(x -> endswith(x, ".jld"), readdir(dir))
     f = split(f,".")[1]
     push!(results,String(f))
 end
-filter!(x->!in(x,["Combined"]),results)
+filter!(x->!in(x,["Combined";"RobustControl"]),results)
 
 length(unique(results)) != length(results) && warn("Careful, you are trying to combine files from the same problem type.")
 
@@ -54,18 +54,20 @@ for iii=1:length(results)
       error("You are trying to combine the data of two different solver settings: $(resTarget.solverName) vs. $(resSource.solverName).")
     end
     # add check that solver is still the same
-
     resTarget.iter[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.iter
     resTarget.objVal[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.objVal
     resTarget.runTime[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.runTime
+    resTarget.iterTime[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.iterTime
+    resTarget.setupTime[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.setupTime
     resTarget.status[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.status
     resTarget.problemDim[resTarget.ind+1:resTarget.ind+resSource.ind,:] = resSource.problemDim
     resTarget.problemName[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.problemName
+    resTarget.objTrue[resTarget.ind+1:resTarget.ind+resSource.ind] = resSource.objTrue
     resTarget.ind += resSource.ind
   end
 
 
 end
-fn = dir * "/Combined_without_MIQO_Lovasz.jld"
+fn = dir * "/Combined_wo_robust.jld"
 JLD.save(fn, "resData", resCombined)
 

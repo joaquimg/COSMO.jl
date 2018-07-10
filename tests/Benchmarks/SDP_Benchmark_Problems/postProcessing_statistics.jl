@@ -7,8 +7,8 @@ include("../solverComparison/Compare.jl")
 using Formatting, JLD, OSSDP, Compare
 using LatexExport
 
-folderName = "BadlyScaled"
-dir = "../resultDataFiles/SDP_Benchmark_Problems/"*folderName
+folderName = "CompareSparseFormat_large_termination"
+dir = "../../resultDataFiles/SDP_Benchmark_Problems/"*folderName
 results = []
 for f in filter(x -> endswith(x, ".jld"), readdir(dir))
     f = split(f,".")[1]
@@ -40,7 +40,13 @@ for iii=1:length(results)
     numSolved = length(solvedInd)
     percSolved = numSolved/s.ind
 
-    sm = Compare.SolverMetrics(s.solverName,s.adaptionON,s.scalingON,meanIterAll,meanIterSolved,numSolved,percSolved)
+    meanErr = mean(abs.(s.objVal - s.objTrue)[solvedInd])
+    meanRunTime = mean(s.runTime)
+    meanIterTime = mean(s.iterTime)
+    meanAvgIterTime = mean((s.iterTime./s.iter))*1000
+    meanSetupTime = mean(s.setupTime)
+    meanNZ = mean(s.problemDim[:,3])
+    sm = Compare.SolverMetrics(s.solverName,s.adaptionON,s.scalingON,meanIterAll,meanIterSolved,numSolved,percSolved,meanErr,meanRunTime,meanIterTime,meanAvgIterTime,meanSetupTime,meanNZ)
     pm.solverResults[k] = sm
     k+=1
   end
@@ -68,10 +74,10 @@ for pm in metricsArr
   println("- Number of Problems: $(pm.numProblems)")
   println("- Number of Solvers: $(pm.numSolvers)")
 
-    println("Solver Name:\tAdaption ON:\tScaling ON:\tNum Solved:\t% Solved:\tMean Iter (all):\tMean Iter (solved):")
+    println("Solver Name:\tNum Solved:\t% Solved:\tNonZ:\t\tIter (all):\tIter (solv):\tRT(all):\tIT(all):\tAvgIter[ms](all):\tSetupT(all):\tMean Error(solved):")
   for sm in pm.solverResults
 
-    printfmt("{1:s}\t{2:b}\t\t{3:b}\t\t{4:d}\t\t{5:.2f}\t\t{6:.2f}\t\t\t{7:.2f}\n",sm.solverName,sm.adaptionON,sm.scalingON,sm.numSolved,sm.percSolved,sm.meanIterAll,sm.meanIterSolved)
+    printfmt("{1:s}\t{2:d}\t\t{3:.2f}\t\t{4:.2f}\t\t{5:.2f}\t\t{6:.2f}\t\t{7:.4f}\t\t{8:.4f}\t\t{9:.4f}\t\t{10:.4f}\t\t{11:.4f}\n",sm.solverName[1:11],sm.numSolved,sm.percSolved,sm.meanNZ,sm.meanIterAll,sm.meanIterSolved,sm.meanRunTime,sm.meanIterTime,sm.meanAvgIterTime,sm.meanSetupTime,sm.meanErr)
     # println("Solver Name: $(sm.solverName[1:10])\tadaptionON: $(sm.adaptionON)\tscalingON: $(sm.scalingON)\tNum Solved: $(sm.numSolved)/$(pm.numProblems)\t% solved: $(sm.percSolved)\tMean Iter (all): $(sm.meanIterAll)\tMean Iter (solved): $(sm.meanIterSolved)")
     # println("Solver Name: $(sm.solverName)\t\tadaptionON: $(sm.adaptionON)\tscalingON: $(sm.scalingON)\tNum Solved: $(sm.numSolved)/$(pm.numProblems)\t% solved: $(sm.percSolved)\tMean Iter (all): $(sm.meanIterAll)\tMean Iter (solved): $(sm.meanIterSolved)")
   end
@@ -82,7 +88,8 @@ println("-"^80)
 resPath = dir*"/latex/"
 !ispath(resPath) && mkdir(resPath)
 
-  # createLatexTable(metricsArr,resPath)
+ createLatexTable(metricsArr,resPath)
+ # exportSolverSettings(metricsArr,resPath)
 
 
 
