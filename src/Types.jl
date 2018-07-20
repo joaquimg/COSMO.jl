@@ -15,6 +15,7 @@ export OSSDPResult, Problem, OSSDPSettings, ScaleMatrices, Cone, WorkSpace
     setupTime::Float64
     iterTime::Float64
     projTime::Float64
+    graphTime::Float64
     rPrim::Float64
     rDual::Float64
   end

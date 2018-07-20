@@ -43,7 +43,7 @@ mutable struct CliqueSet
   cliques::Vector{Int64} # just a vector with all cliques stacked
   vlen::Int64
   nBlk::Vector{Int64} # sizes of blocks
-  N::Int64 #number of cliques in the set
+  N::Int64 # number of cliques in the set
 
   function CliqueSet(cliqueArr::Array{Array{Int64,1}})
     p = length(cliqueArr)
@@ -70,14 +70,6 @@ end
 # ---------------------------
 # FUNCTIONS
 # ---------------------------
-A1 = [1. 2 0; 4 5 6; 0 8 9]
-A2 = [1. 2 0; 4 5 6; 0 8 9]
-A = sparse([[9; 9; 9];vec(A1);vec(A2)])[:,:]
-b = rand(21,1)
-b[[6,10,15,19]] = 0
-K = OSSDPTypes.Cone(1,2,[],[9 9])
-P = speye(size(A,2))
-q = zeros(size(A,2))
 
 function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float64},A::SparseMatrixCSC{Float64,Int64},b::Vector{Float64},K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings,chordalInfo::OSSDPTypes.ChordalInfo)
 
@@ -104,11 +96,9 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
     cliqueSets[iii] = CliqueSet(sp.cliques)
     st+= K.s[iii]
   end
-
   # find transformation matrix H and store it
   H, KsA = findStackingMatrix(K,cliqueSets)
   chordalInfo.H = H
-
   # augment the system, change P,q,A,b
   m,n = size(A)
   mH,nH = size(H)
@@ -122,16 +112,6 @@ function chordalDecomposition!(P::SparseMatrixCSC{Float64,Int64},q::Vector{Float
   # TODO: Also return some information about sparsity to reverse decomposition
   return P,q,A,b,K
 end
-
-
-# Asub = sparse(rand(16,4))
-# bsub = rand(16,1)
-# dropzeros!(Asub)
-# Asub[4,:] = 0
-# Asub[15,:] = 0
-# Asub[8,:] = 0
-# bsub[15] = 0
-# bsub[8] = 0
 
 # find the zero rows of a sparse matrix a
 function zeroRows(a::SparseMatrixCSC,DROPZEROS_FLAG::Bool)
@@ -150,6 +130,13 @@ function nzrows(a::SparseMatrixCSC,DROPZEROS_FLAG::Bool)
         active[r] = true
     end
     return find(active)
+end
+
+function numberOfOverlapsInRows(A::SparseMatrixCSC)
+  # sum the entries row-wise
+  numOverlaps = sum(A,2)
+  ri = find(x-> x > 1,numOverlaps)
+  return ri, numOverlaps[ri]
 end
 
 function findCommonSparsity(A,b)
@@ -251,15 +238,38 @@ function reverseDecomposition!(ws,settings)
   mO = ws.ci.originalM
   nO = ws.ci.originalN
   H = ws.ci.H
+
+  sbar = ws.x[nO+1:end]
+  s2 = ws.s[mO+1:end]
+
   ws.s = H*ws.s[mO+1:end]
   ws.x = ws.x[1:nO]
-  ws.μ = H*ws.μ[mO+1:end]
-  # positive semidefinite completion on parts of μ
+
+  # fill dual variables such that μ_k  = H_k μ for k=1,...,p
+  fillDualVariables!(ws)
+  # if user requests, perform positive semidefinite completion on entries of μ that were not in the decomposed blocks
   settings.completeDual && psdCompletion!(ws)
-  # settings.completeDual && psdCompletion(ws.μ)
+  δs = s2 - sbar
+  maxRowH = maximum(sum(H,2))
+  return δs, maxRowH
+end
+
+function fillDualVariables!(ws)
+  mO = ws.ci.originalM
+  H = ws.ci.H
+
+  # this performs the operation μ = sum H_k^T *  μ_k causing an addition of (identical valued) overlapping blocks
+  ws.μ = H*ws.μ[mO+1:end]
   ws.ν = H*ws.ν[mO+1:end]
 
-  return H
+  # to remove the overlaps we take the average of the values for each overlap by dividing by the number of blocks that overlap in a particular entry, i.e. number of 1s in each row of H
+  rowInd,nnzs = numberOfOverlapsInRows(H)
+
+  for iii=1:length(rowInd)
+    ri = rowInd[iii]
+    ws.μ[ri] = ws.μ[ri]/nnzs[iii]
+    ws.ν[ri] = ws.ν[ri]/nnzs[iii]
+  end
 end
 
 # complete the dual variable

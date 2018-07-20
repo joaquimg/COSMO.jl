@@ -38,7 +38,8 @@ export setRhoVec!, adaptRhoVec!, updateRhoVec!
     nINEQ = p.m - p.K.f
 
     settings.rho = newRho
-    p.ρVec = [1e3*newRho*ones(nEQ);newRho*ones(nINEQ)]
+    # p.ρVec = [1e3*newRho*ones(nEQ);newRho*ones(nINEQ)]
+     p.ρVec = newRho*ones(nEQ+nINEQ)
     # log rho updates to info variable
     push!(p.Info.rho_updates,newRho)
     factorKKT!(p,settings)

@@ -121,16 +121,17 @@ function findParent(g::Graph,higherNeighbors::Array{Int64})
   end
 end
 
-function findParentDirect(g::Graph,v::Int64)
-  order = g.ordering[v]
-  neighbors = g.adjacencyList[v]
-  higherOrders = filter(x->x>order,g.ordering[neighbors])
-  if length(higherOrders) > 0
-    return g.reverseOrder[minimum(higherOrders)]
-  else
-    return 0
+  # find the cardinality of adj+(v) for all v in V
+ function higherDegrees(g::GraphModule.Graph)
+    N = length(g.adjacencyList)
+    degrees = zeros(Int64,N)
+    for iii = 1:N
+        order = g.ordering[iii]
+        degrees[iii] = length(filter(x-> g.ordering[x] > order,g.adjacencyList[iii]))
+    end
+    return degrees
   end
-end
+
 
 
 
@@ -138,6 +139,14 @@ function findHigherNeighbors(g::Graph,nodeNumber::Int64)
   order = g.ordering[nodeNumber]
   neighbors = g.adjacencyList[nodeNumber]
   higherNeighbors = neighbors[find(f->f>order,g.ordering[neighbors])]
+  return higherNeighbors
+end
+
+function findHigherNeighborsSorted(g::Graph,nodeNumber::Int64,ordering::Array{Int64,1})
+  order = ordering[nodeNumber]
+  neighbors = g.adjacencyList[nodeNumber]
+  higherNeighbors = neighbors[find(f->f>order,ordering[neighbors])]
+  sort!(higherNeighbors, by=x->ordering[x])
   return higherNeighbors
 end
 

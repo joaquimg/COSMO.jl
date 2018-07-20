@@ -15,8 +15,24 @@ include("./ChordalSparsity.jl")
 module OSSDP
 
 using Projections, Scaling, OSSDPTypes, Parameters, Infeasibility, Residuals, Printing, Setup, ChordalSparsity
-export solve, OSSDPSettings, Cone #from the Types module
+export solve, OSSDPSettings, Cone, ResidualTerms #from the Types module
 
+
+mutable struct ResidualTerms
+  rPrim_aug::Float64
+  rDual_aug::Float64
+  rPrim::Float64
+  rDual::Float64
+  rPrimMax_aug::Array{Float64,1}
+  rDualMax_aug::Array{Float64,1}
+  rPrimMax::Array{Float64,1}
+  rDualMax::Array{Float64,1}
+
+
+  function ResidualTerms()
+    return new(0.,0.,0.,0.,[0.],[0.],[0.],[0.])
+  end
+end
 
 function admmStep!(x, s, μ, ν, x_tl, s_tl, ls, sol, F, q, b, K, ρ, α, σ, m, n,projTime)
   # Create right hand side for linear system
@@ -47,28 +63,24 @@ end
 
 # SOLVER ROUTINE
 # -------------------------------------
-  function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
+function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   runTime_start = time()
+
   projTime = 0.
   # check if chordal decomposition wanted and possible, if so augment system
+  graphTime_start = time()
+
   chordalInfo = OSSDPTypes.ChordalInfo(size(A,1),size(A,2),K)
   if settings.decompose
-    Pa,qa,Aa,ba,Ka = chordalDecomposition!(P,q,A,b,K,settings,chordalInfo)
-  else
-    Pa = P
-    qa = q
-    Aa = A
-    ba = b
-    Ka = K
+    P,q,A,b,K = chordalDecomposition!(P,q,A,b,K,settings,chordalInfo)
   end
+  graphTime = time() - graphTime_start
   # create workspace variables
-  ws = WorkSpace(Problem(Pa,qa,Aa,ba,Ka),ScaleMatrices(),chordalInfo)
-  P = q = A = b = K = nothing
+  ws = WorkSpace(Problem(P,q,A,b,K),ScaleMatrices(),chordalInfo)
 
   # perform preprocessing steps (scaling, initial KKT factorization)
-  tic()
   setup!(ws,settings)
-  setupTime = toq()
+  setupTime = time() - runTime_start
 
   # instantiate variables
   iter = 0
@@ -89,8 +101,8 @@ end
   δy =  similar(ws.μ)
   x_tl = similar(ws.x) # i.e. xTilde
   s_tl = similar(ws.s) # i.e. sTilde
-  const n = ws.p.n
-  const m = ws.p.m
+  n = ws.p.n
+  m = ws.p.m
   ls = zeros(n + m)
   sol = zeros(n + m)
 
@@ -171,12 +183,15 @@ end
     end
 
   end #END-ADMM-MAIN-LOOP
-
-  normArr = Residuals.investigateMaxNorms(ws,settings)
+  residualInfo = ResidualTerms()
+  residualInfo.rPrim_aug = r_prim
+  residualInfo.rDual_aug = r_dual
+  Residuals.investigateMaxNorms!(ws,settings,residualInfo)
 
   iterTime = (time()-iter_start)
 
   # calculate primal and dual residuals
+  # TODO: Is that information really necessary?
   if iter == settings.max_iter
     r_prim,r_dual = calculateResiduals(ws,settings)
     status = :UserLimit
@@ -186,21 +201,27 @@ end
   if settings.scaling != 0 && (cost != Inf && cost != -Inf)
     reverseScaling!(ws)
     # FIXME: Another cost calculation is not necessary since cost value is not affected by scaling
-    cost =  (1/2 * ws.x'*ws.p.P*ws.x + ws.p.q'*ws.x)[1] #sm.cinv * not necessary anymore since reverseScaling
+    # cost =  (1/2 * ws.x'*ws.p.P*ws.x + ws.p.q'*ws.x)[1] #sm.cinv * not necessary anymore since reverseScaling
   end
 
   # if necessary, reverse augmentation to get solution to original problem
-  settings.decompose && reverseDecomposition!(ws,settings)
+  δs = [0.]
+  maxRowH = 0.
+  if settings.decompose
+    δs,maxRowH = reverseDecomposition!(ws,settings)
+  end
 
   runTime = time() - runTime_start
   # print solution to screen
   settings.verbose && printResult(status,iter,cost,runTime)
 
+  calculateOriginalResiduals!(ws,residualInfo)
+
 
   # create result object
-  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,projTime,r_prim,r_dual);
+  result = OSSDPResult(ws.x,ws.s,ws.ν,ws.μ,cost,iter,status,runTime,setupTime,iterTime,projTime,graphTime,r_prim,r_dual);
 
-  return result,ws,normArr;
+  return result,ws,residualInfo,δs,maxRowH;
 
 end
 

@@ -1,7 +1,7 @@
 module TreeModule
     using GraphModule
-    export Tree, Node, createTreeFromGraph, createSupernodeEliminationTree, createCliqueTree, numberOfCliques
-
+    export Tree, Node, createTreeFromGraph, createSupernodeEliminationTree, createCliqueTree, numberOfCliques,printCliques, printSupernodes
+    export childFromPar, postOrder,etree, higherDegrees, invertOrder, checkDegreeCondition, pothenSunGarstka, getSnd, getClique
 
     # -------------------------------------
     # TYPE DEFINITIONS
@@ -45,16 +45,55 @@ module TreeModule
   end
 
 
+  mutable struct SuperNodeTree
+    snd::Array{Int64,1} #vertices of supernodes stored in one array
+    snptr::Array{Int64,1} # vertices of supernode i are stored in snd[snptr[i]:snptr[i+1]-1]
+    snd_par::Array{Int64,1}  # parent of supernode k is supernode j=snd_par[k]
+    snd_post::Array{Int64,1} # post order of suprnodal elimination tree
+    post::Array{Int64} # post ordering of the vertices in elim tree
+    par::Array{Int64}
+    cliques::Array{Int64,1} #vertices of cliques stored in one array
+    chptr::Array{Int64,1} #points to the indizes where new clique starts in cliques array
+
+    function SuperNodeTree(g::GraphModule.Graph)
+        par = etree(g)
+        child = childFromPar(par)
+        post = postOrder(par,child)
+        # faster algorithm according to Vandenberghe p.308
+        degrees = GraphModule.higherDegrees(g)
+
+        snd, snptr, snd_par = TreeModule.findSuperNodes(par,child,post,degrees)
+
+        # TODO: amalgamate supernodes
+        snd_child = childFromPar(snd_par)
+        snd_post = postOrder(snd_par,snd_child)
+
+        cliques,chptr = findCliques(g,snd,snptr,snd_par,post)
+
+        new(snd,snptr,snd_par,snd_post,post,par,cliques,chptr)
+    end
+
+  end
+
+
     # -------------------------------------
     # FUNCTION DEFINITIONS
     # -------------------------------------
+    # given v=σ^-1(i) it returns i=σ(v)
+    function invertOrder(sigma::Array{Int64,1})
+        sigmaInv = zeros(Int64,length(sigma))
+        for iii=1:length(sigma)
+            sigmaInv[sigma[iii]] = iii
+        end
+        return sigmaInv
+    end
 
      function numberOfCliques(ct::Tree)
         return size(ct.nodes,1)
     end
 
     # elimination tree algorithm from H.Liu - A Compact Row Storage Scheme for Cholesky Factors Using Elimination Trees
-    function etree_liu(GraphModule.g::Graph)
+    function etree_liu(g::GraphModule.Graph)
     N = length(g.adjacencyList)
     par = zeros(Int64,N)
     ancestor = zeros(Int64,N)
@@ -82,6 +121,7 @@ module TreeModule
 
 
 
+
     # simplified version of my own elimination tree algorithm with simplified data structure (fastest)
     function etree(g::GraphModule.Graph)
         N = numberOfVertices(g)
@@ -94,6 +134,192 @@ module TreeModule
             par[i] = par_
         end
         return par
+    end
+
+    # perform a depth-first-search to determine the post order of the tree defined by parent and children vectors
+    function postOrder(par::Array{Int64,1},child::Array{Array{Int64,1}})
+        N = length(par)
+        order = zeros(Int64,N)
+        root = find(x->x==0,par)[1]
+        stack = Array{Int64,1}(0)
+        iii = N
+        push!(stack,root)
+        while !isempty(stack)
+            v = pop!(stack)
+            order[v] = iii
+            iii-=1
+            push!(stack,child[v]...)
+        end
+        post = collect(1:N)
+        sort!(post, by=x->order[x])
+        return post
+    end
+
+    function childFromPar(par::Array{Int64,1})
+        child = [Array{Int64,1}(0) for i=1:length(par)]
+        for i=1:length(par)
+            par_ = par[i]
+            par_ != 0 && push!(child[par_],i)
+        end
+
+        return child
+
+    end
+
+    function getSnd(sntree::SuperNodeTree,ind::Int64)
+        N = length(sntree.snptr)
+        if ind == N
+            return sntree.snd[sntree.snptr[ind]:end]
+        else
+            return sntree.snd[sntree.snptr[ind]:sntree.snptr[ind+1]-1]
+        end
+    end
+
+    function getClique(sntree::SuperNodeTree,ind::Int64)
+        N = length(sntree.chptr)
+        if ind == N
+            return sntree.cliques[sntree.chptr[ind]:end]
+        else
+            return sntree.cliques[sntree.chptr[ind]:sntree.chptr[ind+1]-1]
+        end
+    end
+    function printCliques(sntree::SuperNodeTree)
+        N = length(sntree.chptr)
+        chptr = sntree.chptr
+        println("Cliques of Graph:")
+        for iii=1:N
+             if iii != N
+                clique = sntree.cliques[chptr[iii]:chptr[iii+1]-1]
+            else
+                clique = sntree.cliques[chptr[iii]:end]
+            end
+            println("$(iii): $(clique)")
+        end
+    end
+
+    function printSupernodes(sntree::SuperNodeTree)
+        N = length(sntree.snptr)
+        snptr = sntree.snptr
+        println("Supernodes of Graph:")
+        for iii=1:N
+             if iii != N
+                sn = sntree.snd[snptr[iii]:snptr[iii+1]-1]
+            else
+                sn = sntree.snd[snptr[iii]:end]
+            end
+            println("$(iii): $(sn)")
+        end
+    end
+
+
+    function checkDegreeCondition(v::Int64,w::Int64,degrees::Array{Int64,1})
+        return degrees[v] > degrees[w] - 1
+    end
+
+
+    # Algorithm from A. Poten and C. Sun: Compact Clique Tree Data Structures in Sparse Matrix Factorizations (1989)
+    function pothenSun(par::Array{Int64,1},child::Array{Array{Int64,1}},post::Array{Int64,1},degrees::Array{Int64,1})
+        N = length(par)
+        snInd = -1*ones(Int64,N) # if snInd[v] < 0 then v is a rep vertex, otherwise v ∈ supernode[snInd[v]]
+        supernode_par = -1*ones(Int64,N)
+
+        # go through vertices in postorder
+        for v in post
+            child_ind = 0
+            # check degree condition for all of v's childs
+            for (iii,w) in enumerate(child[v])
+                # if not deg+(v) > deg+(w) - 1 for a certain w, set u to be w in snd(u), add v to snd(u)
+                if !checkDegreeCondition(v,w,degrees)
+                    snInd[w] < 0 ? (u = w) : (u = snInd[w])
+                    snInd[v] = u
+                    child_ind = iii
+                    break
+                end
+            end
+
+            # if v is still a rep vertex (i.e. above loop didnt find a child that fulfilled degree condition)
+            if snInd[v] < 0
+                u = v
+            end
+
+            for (iii,w) in enumerate(child[v])
+                if iii != child_ind
+                    snInd[w] < 0 ? (x = w) : x = snInd[w]
+                    supernode_par[x] = u
+                end
+            end
+        end
+
+        # representative vertices
+        repr = find(x-> x < 0, snInd)
+        # vertices that are the parent of representative vertices
+        reprPar = supernode_par[repr]
+        # take into account that all non-representative arrays are removed from the parent structure
+        supernode_par = map(x->(findfirst(y->y==x,repr)),reprPar)
+
+        return supernode_par,snInd
+    end
+
+
+    function findSuperNodes(par::Array{Int64,1},child::Array{Array{Int64,1}},post::Array{Int64,1},degrees::Array{Int64,1})
+        supernode_par,snInd = TreeModule.pothenSun(par,child,post,degrees)
+        # number of vertices
+        N = length(par)
+        # number of representative vertices == number of supernodes
+        Nrep = length(supernode_par)
+
+        snode = zeros(Int64,N)
+        snodeList = [Array{Int64}(0) for i=1:N]
+        snptr = zeros(Int64,Nrep)
+
+        for iii in post
+            f = snInd[iii]
+            if f < 0
+                push!(snodeList[iii],iii)
+
+            else
+                push!(snodeList[f],iii)
+            end
+        end
+
+        kkk = 1
+        jjj = 1
+        for (iii,list) in enumerate(snodeList)
+            len = length(list)
+            if len > 0
+                snptr[jjj] = kkk
+                snode[kkk:kkk+len-1] = list
+                kkk+= len
+                jjj+=1
+            end
+        end
+        return snode, snptr, supernode_par
+
+    end
+
+    function findCliques(g::GraphModule.Graph,snodes::Array{Int64,1},snptr::Array{Int64,1},supernode_par::Array{Int64,1},post::Array{Int64,1})
+            postInv = invertOrder(post)
+
+            Nc = length(supernode_par)
+            cliques = Array{Int64,1}(0)
+            chptr = zeros(Int64,Nc)
+            jjj = 1
+
+            for iii = 1:Nc
+                if iii < Nc
+                    vRep = snodes[snptr[iii]:snptr[iii+1]-1][1]
+                else
+                    vRep = snodes[snptr[iii]:end][1]
+                end
+                adjPlus = GraphModule.findHigherNeighborsSorted(g,vRep,postInv)
+                deg = length(adjPlus) + 1
+                cliques = [cliques;vRep;adjPlus]
+                chptr[iii] = jjj
+                jjj +=deg
+            end
+
+        return cliques,chptr
+
     end
 
     function findParentDirect(g::GraphModule.Graph,v::Int64)
