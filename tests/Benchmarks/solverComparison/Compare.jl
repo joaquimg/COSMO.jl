@@ -2,7 +2,7 @@ include("../Meszaros_Problems/ConvertProblem.jl")
 
 module Compare
 
-using OSSDPTypes, JLD, Converter
+using OSSDPTypes, Converter, JLD, FileIO
 export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFilenames, printStatus, SolverMetrics, ProblemMetrics
 
 
@@ -12,7 +12,11 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
     status::Array{Symbol,1}
     objVal::Array{Float64,1}
     x::Array{Array{Float64}}
-    runTime::Array{Float64,1}
+    solverTime::Array{Float64,1}
+    setupTime::Array{Float64,1}
+    graphTime::Array{Float64,1}
+    iterTime::Array{Float64,1}
+    projTime::Array{Float64,1}
     numProblems::Int64
     problemDim::Array{Int64,2}
     problemName::Array{String,1}
@@ -33,8 +37,12 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
     status[1:numProblems] = :empty
     objVal = zeros(numProblems)
     x = Array{Array{Float64}}(numProblems)
-    runTime = zeros(numProblems)
-    problemDim = zeros(Int64,numProblems,3)
+    solverTime = zeros(numProblems)
+    setupTime = zeros(numProblems)
+    graphTime = zeros(numProblems)
+    iterTime = zeros(numProblems)
+    projTime = zeros(numProblems)
+    problemDim = zeros(Int64,numProblems,6)
     problemName = Array{String}(numProblems)
     problemName[1:numProblems] = "-"
     ind = 0
@@ -46,7 +54,7 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
     else
         settings = [solverSettings.rho;solverSettings.sigma;solverSettings.alpha;solverSettings.scaling;solverSettings.eps_abs;solverSettings.eps_rel]
     end
-    new(iter,status,objVal,x,runTime,numProblems,problemDim,problemName,problemType,solverName,settings,timeStamp,ind,scalingON,adaptionON,objTrue,xTrue)
+    new(iter,status,objVal,x,solverTime,setupTime,graphTime,iterTime,projTime,numProblems,problemDim,problemName,problemType,solverName,settings,timeStamp,ind,scalingON,adaptionON,objTrue,xTrue)
     end
   end
 
@@ -63,6 +71,15 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
     meanIterSolved::Float64
     numSolved::Int64
     percSolved::Float64
+    meanErr::Float64
+    meansolT::Float64
+    meansT::Float64
+    meangT::Float64
+    meaniT::Float64
+    meanpT::Float64
+    meanAvgIterTime::Float64
+    meanAvgProjTime::Float64
+    meanNZ::Float64
   end
 
   mutable struct ProblemMetrics
@@ -122,11 +139,11 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
     for jjj=1:length(resData)
       r = resData[jjj]
       r.scalingON ? si = " - scaled" : si = " - unscaled"
-      println(" "^6*"$(r.solverName)$(si): Iterations: $(r.iter[r.ind]), Cost:$(r.objVal[r.ind]), Status:$(r.status[r.ind]), Runtime: $(r.runTime[r.ind])")
+      println(" "^6*"$(r.solverName)$(si): Iterations: $(r.iter[r.ind]), Cost:$(r.objVal[r.ind]), Status:$(r.status[r.ind]), Runtime: $(r.solverTime[r.ind])")
     end
   end
 
-  function updateResults!(fn::String,resData,resArr,pDims::Array{Int64},pName::String,r::Union{Float64, Int64},SAVE_ALWAYS::Bool)
+  function updateResults!(fn::String,resData,resArr,pDims::Array{Int64},pName::String,r::Union{Float64, Int64},SAVE_ALWAYS::Bool,objTrue::Float64)
     numSolvers = length(resArr)
     n = pDims[2]
 
@@ -135,24 +152,19 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
       resObj.ind+=1
       resObj.problemDim[resObj.ind,:] = pDims
       resObj.problemName[resObj.ind] = pName
-      if contains(resObj.solverName,"QOCS")
-        resObj.iter[resObj.ind] = resArr[i].iter
-        resObj.objVal[resObj.ind] = resArr[i].cost + r
-        resObj.x[resObj.ind] = resArr[i].x[1:n]
-        resObj.runTime[resObj.ind] = resArr[i].solverTime
-        resObj.status[resObj.ind] = resArr[i].status
-      elseif contains(resObj.solverName,"OSQP")
-        resObj.iter[resObj.ind] = resArr[i].info.iter
-        resObj.objVal[resObj.ind] = resArr[i].info.obj_val + r
-        resObj.x[resObj.ind] = resArr[i].x
-        resObj.status[resObj.ind] = resArr[i].info.status
-      else
-        nothing
-      end
+      resObj.iter[resObj.ind] = resArr[i].iter
+      resObj.objVal[resObj.ind] = resArr[i].cost + r
+      resObj.solverTime[resObj.ind] = resArr[i].solverTime
+      resObj.setupTime[resObj.ind] = resArr[i].setupTime
+      resObj.graphTime[resObj.ind] = resArr[i].graphTime
+      resObj.iterTime[resObj.ind] = resArr[i].iterTime
+      resObj.projTime[resObj.ind] = resArr[i].projTime
+      resObj.status[resObj.ind] = resArr[i].status
+      #resObj.objTrue[resObj.ind] = objTrue
     end
 
     if SAVE_ALWAYS
-      JLD.save(fn, "resData", resData)
+      save(fn, "resData", resData)
     end
 
 
