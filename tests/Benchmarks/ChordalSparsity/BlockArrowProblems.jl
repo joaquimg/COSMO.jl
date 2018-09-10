@@ -4,30 +4,31 @@
 workspace()
 include("../../../src/Solver.jl")
 include("../solverComparison/Compare.jl")
+include("../solverComparison/ExternalSolver.jl")
 
-using OSSDP, Base.Test, Compare, JLD
+using OSSDP, Base.Test, Compare, JLD, ExternalSolver
 SAVE_ALWAYS = true
 maxIter = 2000
 
 # choose experiment name, otherwise save in folder based on timestamp
-EXPERIMENT_NAME = "BlockArrowProblems"
+EXPERIMENT_NAME = "BlockArrow-v06-Conference/"
 # create a new folder for the results based on timestamp
 timestamp = Dates.format(now(), "yyddmm_HH-MM")
 
 isdefined(:EXPERIMENT_NAME) ? folderName=EXPERIMENT_NAME : folderName=timestamp
-resPath = "../resultDataFiles/SDP_Benchmark_Problems/"*folderName
+resPath = "/Users/Micha/Dropbox/Research/OSSDP/Code/test/resultDataFiles/SDP_Benchmark_Problems/"*folderName
 !ispath(resPath) && mkdir(resPath)
 
 # find available problem types in SDP_Benchmark_Problems folder
 # probPath = "/Users/Micha/Dropbox/Research/SDP_Benchmark_Problems/DataFiles/Julia/"
-probPath = "/Users/Micha/Dropbox/Research/SDP_Benchmark_Problems/DataFiles/BlockArrow/"
+probPath = "/Users/Micha/Dropbox/Research/SDP_Benchmark_Problems/DataFiles/DecomposableProblems/BlockArrow/"
 existingFolders = readdir(probPath)
 problemTypes = []
 for f in filter(x -> !startswith(x, "."), readdir(probPath))
     f = split(f,".")[1]
     push!(problemTypes,String(f))
 end
-filter!(x->!in(x,["SmallestCircle"]),problemTypes)
+#filter!(x->!in(x,["SmallestCircle"]),problemTypes)
 println(">>> $(length(problemTypes)) Problem Type(s) detected!")
 
 # run tests for each problem type
@@ -70,14 +71,19 @@ for pType in problemTypes
     Kq = data["Kq"]
     Ks = data["Ks"]
 
-    # objTrue = data["objTrue"]
+    objTrue = data["objTrue"]
+    solveTime = data["solveTime"]
     problemName = data["problemName"]
 
 
-    pDims = [size(A,1);size(A,2);nnz(A)]
+     mconstr = data["mconstr"]
+    l = data["l"]
+    d = data["d"]
 
-    settings            = OSSDPSettings(max_iter=maxIter,checkTermination=40,adaptive_rho=true,decompose=false)
-    settings_decompose  = OSSDPSettings(max_iter=maxIter,checkTermination=40,adaptive_rho=true,decompose=true)
+    pDims = [size(A,1);size(A,2);nnz(A);l;mconstr;d]
+
+    settings            = OSSDPSettings(max_iter=maxIter,checkTermination=40,adaptive_rho=true,decompose=false,objTrue = objTrue)
+    settings_decompose  = OSSDPSettings(max_iter=maxIter,checkTermination=40,adaptive_rho=true,decompose=true,objTrue = objTrue)
 
     # define cone membership
     K = Cone(Kf,Kl,Kq,Ks)
@@ -89,6 +95,7 @@ for pType in problemTypes
     print("\n.")
 
     # solve with MOSEK
+    res3 = ExternalSolver.solveWithMOSEK(objTrue,solveTime,m,n)
 
 
     # solve with SCS v.1.2.6
@@ -96,8 +103,8 @@ for pType in problemTypes
 
     # save results
     # resArray = [res1;res2;res3;res4;res5;res6;res7;res8]
-    resArray = [res5;res6;res7;res8]
-    updateResults!(resFileName,resData,resArray,pDims,problemName,r,SAVE_ALWAYS)
+    resArray = [res1;res2;res3]
+    updateResults!(resFileName,resData,resArray,pDims,problemName,r,SAVE_ALWAYS,objTrue)
     printStatus(iii,nn,problemName,resData)
   end
   println(">>> ProblemType: $(pType) completed!")
