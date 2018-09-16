@@ -165,8 +165,8 @@ export scaleRuiz!, reverseScaling!
     c = ws.sm.c
 
     ws.x[:] = D*ws.x
-    # ws.p.P[:,:] = Dinv*ws.p.P*Dinv./c
-    # ws.p.q[:] = (Dinv*ws.p.q)./c
+    ws.p.P[:,:] = Dinv*ws.p.P*Dinv./c
+    ws.p.q[:] = (Dinv*ws.p.q)./c
     ws.s[:] = Einv*ws.s
 
     ws.ν[:] = E*ws.ν./c

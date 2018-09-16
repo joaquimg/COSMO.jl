@@ -201,7 +201,7 @@ function solve(P,q,A,b,K::OSSDPTypes.Cone,settings::OSSDPTypes.OSSDPSettings)
   if settings.scaling != 0 && (cost != Inf && cost != -Inf)
     reverseScaling!(ws)
     # FIXME: Another cost calculation is not necessary since cost value is not affected by scaling
-    # cost =  (1/2 * ws.x'*ws.p.P*ws.x + ws.p.q'*ws.x)[1] #sm.cinv * not necessary anymore since reverseScaling
+    cost =  (1/2 * ws.x'*ws.p.P*ws.x + ws.p.q'*ws.x)[1] #sm.cinv * not necessary anymore since reverseScaling
   end
 
   # if necessary, reverse augmentation to get solution to original problem
