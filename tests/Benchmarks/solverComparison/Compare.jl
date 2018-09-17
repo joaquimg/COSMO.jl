@@ -153,7 +153,11 @@ export SolverResult, updateResults!,loadMeszarosData,getMeszarosDim,meszarosFile
       resObj.problemDim[resObj.ind,:] = pDims
       resObj.problemName[resObj.ind] = pName
       resObj.iter[resObj.ind] = resArr[i].iter
-      resObj.objVal[resObj.ind] = resArr[i].cost + r
+      if resObj.solverName == "QCCS"
+        resObj.objVal[resObj.ind] = resArr[i].cost + r
+      else
+        resObj.objVal[resObj.ind] = resArr[i].cost
+      end
       resObj.solverTime[resObj.ind] = resArr[i].solverTime
       resObj.setupTime[resObj.ind] = resArr[i].setupTime
       resObj.graphTime[resObj.ind] = resArr[i].graphTime
