@@ -16,13 +16,14 @@ const DefaultInt   = Int64
 
 include("./algebra.jl")
 include("./projections.jl")
+include("./kktsolvers.jl")          # TODO: PSD check and fast restarts QDLDL / unit tests
 include("./types.jl")               # some types still need tidying
 include("./settings.jl")            # TODO: unmodified - revisit
 include("./constraint.jl")          # TODO: unmodified - revisit
 include("./parameters.jl")          # TODO: unmodified - revisit
 include("./residuals.jl")           # TODO: unmodified - revisit
 include("./scaling.jl")             # TODO: set scaling / E scaling is broken
-include("./kkt.jl")                 # TODO: unmodified - revisit.  Add lin solver type
+include("./kkt.jl")                 # TODO: remove once kktsolvers is integrated
 include("./infeasibility.jl")       # TODO: stylistic fixes needed
 include("./printing.jl")            # TODO: unmodified - revisit
 include("./setup.jl")               # TODO: unmodified - revisit (short - consolidate?)
