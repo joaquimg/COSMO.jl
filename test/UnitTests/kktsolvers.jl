@@ -3,8 +3,8 @@ using Test, LinearAlgebra, SparseArrays, Random, COSMO
 
 rng = Random.MersenneTwister(1234)
 
-m = 3
-n = 4
+m = 10
+n = 20
 
 function make_test_kkt(P,A,sigma,rho)
 
@@ -16,7 +16,10 @@ function make_test_kkt(P,A,sigma,rho)
     return K
 end
 
-solver_types = [COSMO.CholmodKKTSolver COSMO.PardisoKKTSolver COSMO.QDLDLKKTSolver]
+solver_types = [COSMO.CholmodKKTSolver
+                COSMO.PardisoDirectKKTSolver
+                COSMO.PardisoIndirectKKTSolver
+                COSMO.QDLDLKKTSolver]
 
 @testset "$t : KKT solver test" for t in solver_types
 
@@ -39,7 +42,7 @@ solver_types = [COSMO.CholmodKKTSolver COSMO.PardisoKKTSolver COSMO.QDLDLKKTSolv
 
         #test one time solution
         COSMO.ldiv!(solver,lhs)
-        @test (norm(K\rhs - lhs) < 1e-10)
+        @test (norm(K\rhs - lhs) < (1e-5*norm(lhs)))
 
     end
 
@@ -55,7 +58,7 @@ solver_types = [COSMO.CholmodKKTSolver COSMO.PardisoKKTSolver COSMO.QDLDLKKTSolv
 
         #test updated solution
         ldiv!(solver,lhs)
-        @test (norm(K\rhs - lhs) < 1e-10)
+        @test (norm(K\rhs - lhs) < (1e-5*norm(lhs)))
     end
 end
 

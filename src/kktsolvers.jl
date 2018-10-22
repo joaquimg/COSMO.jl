@@ -110,7 +110,14 @@ end
 # -------------------------------------
 # Pardiso
 # -------------------------------------
-mutable struct PardisoKKTSolver <: AbstractKKTSolver
+
+abstract type AbstractPardisoKKTSolver end
+
+#---------------------------
+#Direct Solver Configuration
+#---------------------------
+
+mutable struct PardisoDirectKKTSolver <: AbstractPardisoKKTSolver
 
     ps::PardisoSolver
     K::SparseMatrixCSC
@@ -118,26 +125,15 @@ mutable struct PardisoKKTSolver <: AbstractKKTSolver
     n::Integer
     work::Vector  #working memory since Pardiso doesn't solve in place
 
-    function PardisoKKTSolver(P::SparseMatrixCSC, A::SparseMatrixCSC,sigma,rho)
+    function PardisoDirectKKTSolver(P::SparseMatrixCSC, A::SparseMatrixCSC,sigma,rho)
 
-        m,n  = _kktutils_check_dims(P,A,sigma,rho)
-        K    = tril(_kktutils_make_kkt(P,A,sigma,rho))
-        ps   = PardisoSolver()
-        work = Vector{eltype(A)}(undef,m+n)
+        m, n, K, ps, work = _pardiso_common_init(P,A,sigma,rho)
 
-        #--------
-        # solve in steps following the Pardiso package symmetric
-        # indefinite solver example
-        #--------
-
-        #set to symmetric indefinite
-        set_matrixtype!(ps, Pardiso.REAL_SYM_INDEF)
-        # Initialize the default settings with the current matrix type
+        set_solver!(ps,Pardiso.DIRECT_SOLVER)
         pardisoinit(ps)
 
         # Analyze the matrix and compute a symbolic factorization.
         set_phase!(ps, Pardiso.ANALYSIS)
-        set_perm!(ps, amd(K))
         pardiso(ps, K, work)
 
         # Compute the numeric factorization.
@@ -148,37 +144,82 @@ mutable struct PardisoKKTSolver <: AbstractKKTSolver
         ## set phase to solving for iterations
         set_phase!(ps, Pardiso.SOLVE_ITERATIVE_REFINE)
 
-        return new(ps,K,m,n,work)
+        ##configure settings to solve in place
+        ps.iparm[6] = 1 #solves in place
 
+        return new(ps,K,m,n,work)
     end
 end
 
-function ldiv!(s::PardisoKKTSolver, rhs::Vector)
+#---------------------------
+#Indirect Solver Configuration
+#---------------------------
 
-    #pardiso can't solve in place, so copy the
-    #rhs in work, then solve into the rhs input
-    copyto!(s.work,rhs)
-    pardiso(s.ps, rhs, s.K, s.work)
-    return
+mutable struct PardisoIndirectKKTSolver <: AbstractPardisoKKTSolver
+
+    ps::PardisoSolver
+    K::SparseMatrixCSC
+    m::Integer
+    n::Integer
+    work::Vector  #working memory since Pardiso doesn't solve in place
+
+    function PardisoIndirectKKTSolver(P::SparseMatrixCSC, A::SparseMatrixCSC,sigma,rho)
+
+        m, n, K, ps, work = _pardiso_common_init(P,A,sigma,rho)
+
+        set_solver!(ps,Pardiso.ITERATIVE_SOLVER)
+        pardisoinit(ps)
+
+        ## set phase to solving for iterations
+        set_phase!(ps, Pardiso.SOLVE_ITERATIVE_REFINE)
+
+        ##configure settings to solve in place
+        ps.iparm[6] = 1 #solves in place
+
+        return new(ps,K,m,n,work)
+    end
+end
+
+function _pardiso_common_init(P,A,sigma,rho)
+
+    m,n  = _kktutils_check_dims(P,A,sigma,rho)
+    K    = tril(_kktutils_make_kkt(P,A,sigma,rho))
+    ps   = PardisoSolver()
+    work = zeros(eltype(A),m+n)
+
+    #set to symmetric indefinite
+    set_matrixtype!(ps, Pardiso.REAL_SYM_INDEF)
+
+    return m, n, K, ps, work
 end
 
 
-restart!(s::PardisoKKTSolver) = nothing #direct method, nothing to restart
+function ldiv!(s::AbstractPardisoKKTSolver, rhs::Vector)
 
-function update_rho!(s::PardisoKKTSolver, rho::Union{Vector,AbstractFloat})
+    #we configure pardiso with iparm[6] = 1, so
+    #it solves in place but still needs a work vector
+    pardiso(s.ps, s.work, s.K, rhs)
+    return
+end
+
+restart!(s::AbstractPardisoKKTSolver) = nothing
+
+function update_rho!(s::AbstractPardisoKKTSolver, rho::Union{Vector,AbstractFloat})
 
     didx = diagind(s.K, 0)
     @views s.K[didx[(s.n+1):(s.m+s.n)]] .= -1. ./ rho
 
-    # Compute the numeric factorization again,
-    #but skipping the analysis phase
-    set_phase!(s.ps, Pardiso.NUM_FACT)
-    pardiso(s.ps, s.K, s.work)
-    _pardiso_check_inertia(s.ps,s.m,s.n)
+    #only refactor for the direct solver
+    if s.ps.solver == Pardiso.DIRECT_SOLVER
+        # Compute the numeric factorization again,
+        #but skipping the analysis phase
+        set_phase!(s.ps, Pardiso.NUM_FACT)
+        pardiso(s.ps, s.K, s.work)
+        _pardiso_check_inertia(s.ps,s.m,s.n)
 
-    ## set back to solving phase
-    set_phase!(s.ps, Pardiso.SOLVE_ITERATIVE_REFINE)
-
+        ## set back to solving phase
+        set_phase!(s.ps, Pardiso.SOLVE_ITERATIVE_REFINE)
+    end
 end
 
 function _pardiso_check_inertia(ps,m,n)
