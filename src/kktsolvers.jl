@@ -28,13 +28,30 @@ function _kktutils_check_dims(P,A,sigma,rho)
     return m, n
 end
 
-function _kktutils_make_kkt(P,A,sigma,rho)
+function _kktutils_make_kkt(P,A,sigma,rho,shape::Symbol=:F)
 
     R = length(rho)   == 1 ? ((1.)./rho)*I : Diagonal((1.)./rho)
     S = length(sigma) == 1 ? (sigma)*I : Diagonal(sigma)
 
-    #compute the full KKT matrix
-    K    = [P+S A'; A -R]
+    n = size(P,1)
+    m = size(A,1)
+
+    if     shape == :F
+        #compute the full KKT matrix
+        K = [P+S A'; A -R]
+
+    elseif shape == :U
+        #upper triangular
+        K = [triu(P)+S  A'; spzeros(eltype(A),m,n)  -R]
+
+    elseif shape == :L
+        #lower triangular
+        K = [tril(P)+S  spzeros(eltype(A),n,m); A  -R]
+
+    else
+        error("Bad matrix shape description")
+    end
+
     return K
 
 end
@@ -46,14 +63,18 @@ end
 mutable struct QDLDLKKTSolver <: AbstractKKTSolver
 
     fact::QDLDL.QDLDLFactorisation
-    K
+    K::SparseMatrixCSC
     m::Integer
     n::Integer
 
     function QDLDLKKTSolver(P::SparseMatrixCSC, A::SparseMatrixCSC,sigma,rho)
 
         m,n = _kktutils_check_dims(P,A,sigma,rho)
-        K   = _kktutils_make_kkt(P,A,sigma,rho)
+        #NB: qdldl uses triu internally, but it reorders
+        #with AMD first.  This way is memory inefficient
+        #but saves having to permute the rhs/lhs each
+        #time we solve.
+        K   = _kktutils_make_kkt(P,A,sigma,rho,:F)
         fact = qdldl(K)
 
         return new(fact,K,m,n)
@@ -86,7 +107,7 @@ mutable struct CholmodKKTSolver <: AbstractKKTSolver
     function CholmodKKTSolver(P::SparseMatrixCSC, A::SparseMatrixCSC,sigma,rho)
 
         m,n  = _kktutils_check_dims(P,A,sigma,rho)
-        K    = _kktutils_make_kkt(P,A,sigma,rho)
+        K    = _kktutils_make_kkt(P,A,sigma,rho,:F)
         fact = ldlt(K)
 
         return new(fact,K,m,n)
@@ -183,7 +204,7 @@ end
 function _pardiso_common_init(P,A,sigma,rho)
 
     m,n  = _kktutils_check_dims(P,A,sigma,rho)
-    K    = tril(_kktutils_make_kkt(P,A,sigma,rho))
+    K    = _kktutils_make_kkt(P,A,sigma,rho,:L)
     ps   = PardisoSolver()
     work = zeros(eltype(A),m+n)
 
