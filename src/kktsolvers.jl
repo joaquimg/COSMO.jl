@@ -145,7 +145,7 @@ mutable struct PardisoDirectKKTSolver <: AbstractPardisoKKTSolver
         set_phase!(ps, Pardiso.SOLVE_ITERATIVE_REFINE)
 
         ##configure settings to solve in place
-        ps.iparm[6] = 1 #solves in place
+        set_iparm!(ps,6,1)
 
         return new(ps,K,m,n,work)
     end
@@ -174,7 +174,7 @@ mutable struct PardisoIndirectKKTSolver <: AbstractPardisoKKTSolver
         set_phase!(ps, Pardiso.SOLVE_ITERATIVE_REFINE)
 
         ##configure settings to solve in place
-        ps.iparm[6] = 1 #solves in place
+        set_iparm!(ps,6,1)
 
         return new(ps,K,m,n,work)
     end
